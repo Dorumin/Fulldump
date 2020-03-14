@@ -1,0 +1,22 @@
+{
+  "name": "fulldump",
+  "version": "0.0.1",
+  "description": "Creates full backups of Discord accounts",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "discord",
+    "full",
+    "dump"
+  ],
+  "author": "Doru",
+  "license": "ISC",
+  "dependencies": {
+    "filenamify": "^4.1.0",
+    "got": "^10.5.5",
+    "string-width": "^4.2.0",
+    "yargs": "^15.1.0"
+  }
+}
