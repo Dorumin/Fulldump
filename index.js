@@ -217,6 +217,7 @@ class Dumper {
             logText: '',
             streams: {},
             channels: [],
+            excluded: [],
             fetching: [],
             // finished: 0, // Won't need to use if I don't remove finished channels
             concurrent: 0,
@@ -247,7 +248,7 @@ class Dumper {
                 alias: 'c',
                 type: 'number',
                 desc: 'Channels to fetch at a time',
-                default: 12
+                default: 4
             })
             .option('format', {
                 alias: 'f',
@@ -265,13 +266,19 @@ class Dumper {
                 type: 'string',
                 desc: 'The directory to dump the log folder to'
             })
-            // .option('exclude', {
-            //     alias: 'x',
-            //     type: 'string',
-            //     desc: 'Message IDs to exclude from the pindump and empty procedures',
-            //     default: '',
-            //     coerce: ids => ids.split(',')
-            // })
+            .option('exclude', {
+                alias: 'x',
+                type: 'string',
+                desc: 'Message IDs to exclude from the pindump and empty procedures',
+                default: '',
+                coerce: ids => ids.split(',').map(id => id.trim())
+            })
+            .option('ids', {
+                type: 'string',
+                desc: 'Channel ids to download directly',
+                default: '',
+                coerce: ids => ids.split(',').map(id => id.trim())
+            })
             .argv;
     }
 
@@ -288,6 +295,7 @@ class Dumper {
 
         this.state.token = this.args.token;
         this.state.format = this.args.format;
+        this.state.excluded = this.args.exclude;
         this.state.concurrent = this.args.concurrent;
 
         const [
@@ -362,6 +370,17 @@ class Dumper {
     async queryGuildChannels(guilds) {
         const channels = [];
 
+        if (this.args.ids.length > 0) {
+            channels.push(...this.args.ids);
+            return Promise.all(this.args.ids.map(id => {
+                return got(`https://discordapp.com/api/v6/channels/${id}`, {
+                    headers: {
+                        Authorization: this.state.token
+                    }
+                }).json();
+            }));
+        }
+
         for (let i = 0; i < guilds.length; i++) {
             const guild = guilds[i];
 
@@ -394,7 +413,10 @@ class Dumper {
 
     async fetchGuildChannels(guild) {
         const channels = await this.api(`guilds/${guild.id}/channels`);
-        const textChannels = channels.filter(chan => chan.type === 0);
+        const textChannels = channels
+            .filter(chan => chan.type === 0)
+            .filter(chan => !this.state.excluded.includes(chan.id))
+            .filter(chan => !this.state.excluded.includes(chan.parent_id));
 
         textChannels.forEach(chan => chan.guild = guild);
 
@@ -513,10 +535,17 @@ class Dumper {
 
         while (true) {
             try {
-                const messages = await this.api(path, 'GET', {
-                    limit: 100,
-                    after: lastId
-                });
+                const messages = await Promise.race([
+                    this.api(path, 'GET', {
+                        limit: 100,
+                        after: lastId
+                    }),
+                    new Promise((_, reject) => {
+                        setTimeout(() => {
+                            reject('timeout');
+                        }, 2000);
+                    })
+                ]);
 
                 if (!messages.length) break;
 
@@ -528,6 +557,12 @@ class Dumper {
                     yield messages[i];
                 }
             } catch(e) {
+                // this.log(e);
+
+                if (e === 'timeout') {
+                    // this.log('timeout');
+                }
+
                 if (e.name === 'HTTPError') {
                     // Forbidden
                     if (e.toString().includes('403')) {
@@ -535,7 +570,7 @@ class Dumper {
                     }
                 }
 
-                await this.wait(1000);
+                await this.wait(5000);
             }
         }
     }
