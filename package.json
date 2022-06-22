@@ -15,7 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "filenamify": "^4.1.0",
-    "got": "^10.5.5",
+    "got": "^11.8.5",
     "string-width": "^4.2.0",
     "yargs": "^15.1.0"
   }
